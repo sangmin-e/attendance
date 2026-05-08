@@ -62,9 +62,13 @@ export async function POST(req: Request) {
     recordedAt,
   });
 
+  const studentLabel = student.studentType
+    ? `${student.studentType} ${id} ${student.name}`
+    : `${id} ${student.name}`;
+
   return NextResponse.json({
     ok: true,
-    message: `${id} ${student.name} 학생\n출석했습니다.`,
+    message: `${studentLabel} 학생\n출석했습니다.`,
     studentId: id,
     name: student.name,
     studentType: student.studentType,
