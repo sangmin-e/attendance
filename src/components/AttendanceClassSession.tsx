@@ -45,11 +45,6 @@ export function AttendanceClassSession({ classes }: { classes: ClassOption[] }) 
     setSelectedClassId(classId);
   }
 
-  function resetClass() {
-    window.sessionStorage.removeItem(SESSION_CLASS_KEY);
-    setSelectedClassId(null);
-  }
-
   if (!ready) {
     return (
       <section className="rounded-xl border border-edge bg-card px-5 py-8 text-center shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:px-6">
@@ -106,13 +101,6 @@ export function AttendanceClassSession({ classes }: { classes: ClassOption[] }) 
         <p className="mt-2 text-sm leading-relaxed text-muted sm:text-[15px]">
           예: 1학년 5반 15번이라면 10515
         </p>
-        <button
-          type="button"
-          onClick={resetClass}
-          className="mt-3 text-xs font-semibold text-accent underline underline-offset-4"
-        >
-          수업 다시 선택
-        </button>
       </header>
 
       <section
