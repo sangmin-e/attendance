@@ -60,7 +60,6 @@ export async function appendAttendance(
 export async function getAttendanceByDate(params: {
   rosterId?: string;
   dateKey: string;
-  studentType?: string;
 }): Promise<AttendanceEntry[]> {
   const supabase = getSupabase();
   let query = supabase
@@ -70,10 +69,6 @@ export async function getAttendanceByDate(params: {
 
   if (params.rosterId) {
     query = query.eq("roster_id", params.rosterId);
-  }
-
-  if (params.studentType) {
-    query = query.eq("student_type", params.studentType);
   }
 
   const { data, error } = await query;

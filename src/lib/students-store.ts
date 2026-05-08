@@ -70,6 +70,34 @@ export async function getActiveRoster(): Promise<Roster | null> {
   return rosters[0] ?? null;
 }
 
+export async function getRosterById(rosterId: string): Promise<Roster | null> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("rosters")
+    .select("id, title, updated_at")
+    .eq("id", rosterId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+
+  const row = data as RosterRow;
+  const students = await fetchStudentsForRosters([row.id]);
+  const studentsById: Record<string, StudentInfo> = {};
+  for (const s of students) {
+    studentsById[s.student_id] = {
+      name: s.name,
+      studentType: s.student_type ?? "",
+    };
+  }
+
+  return {
+    id: row.id,
+    title: row.title,
+    updatedAt: row.updated_at,
+    students: studentsById,
+  };
+}
+
 export async function deleteRosterById(rosterId: string): Promise<void> {
   const supabase = getSupabase();
   const { error } = await supabase.from("rosters").delete().eq("id", rosterId);

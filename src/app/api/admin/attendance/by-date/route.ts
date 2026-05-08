@@ -5,6 +5,7 @@ import {
   verifyAdminSessionCookie,
 } from "@/lib/admin-session";
 import { getAttendanceByDate } from "@/lib/attendance-store";
+import { getRosterById } from "@/lib/students-store";
 
 export async function GET(req: Request) {
   const adminSecret = process.env.ADMIN_SESSION_SECRET;
@@ -30,6 +31,20 @@ export async function GET(req: Request) {
     );
   }
 
-  const entries = await getAttendanceByDate({ rosterId, dateKey: date, studentType });
-  return NextResponse.json({ entries });
+  const roster = rosterId ? await getRosterById(rosterId) : null;
+  const entries = await getAttendanceByDate({ rosterId, dateKey: date });
+  const normalizedEntries = entries.map((entry) => {
+    const student = roster?.students[entry.studentId];
+    return {
+      ...entry,
+      name: entry.name ?? student?.name ?? null,
+      studentType: student?.studentType || entry.studentType || null,
+    };
+  });
+
+  const filteredEntries = studentType
+    ? normalizedEntries.filter((entry) => entry.studentType === studentType)
+    : normalizedEntries;
+
+  return NextResponse.json({ entries: filteredEntries });
 }
