@@ -1,6 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import { supabase } from "./supabase";
 
 export type AttendanceEntry = {
   id: string;
@@ -12,46 +10,62 @@ export type AttendanceEntry = {
   recordedAt: string;
 };
 
-type AttendanceFile = {
-  entries: AttendanceEntry[];
+type Row = {
+  id: string;
+  roster_id: string;
+  roster_title: string;
+  student_id: string;
+  name: string | null;
+  date_key: string;
+  recorded_at: string;
 };
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const ATTENDANCE_FILE = path.join(DATA_DIR, "attendance.json");
-
-async function readAttendanceFile(): Promise<AttendanceFile> {
-  try {
-    const raw = await fs.readFile(ATTENDANCE_FILE, "utf8");
-    const parsed = JSON.parse(raw) as Partial<AttendanceFile>;
-    return { entries: Array.isArray(parsed.entries) ? parsed.entries as AttendanceEntry[] : [] };
-  } catch {
-    return { entries: [] };
-  }
-}
-
-async function writeAttendanceFile(value: AttendanceFile): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(ATTENDANCE_FILE, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+function rowToEntry(row: Row): AttendanceEntry {
+  return {
+    id: row.id,
+    rosterId: row.roster_id,
+    rosterTitle: row.roster_title,
+    studentId: row.student_id,
+    name: row.name,
+    dateKey: row.date_key,
+    recordedAt: row.recorded_at,
+  };
 }
 
 export async function appendAttendance(
   entry: Omit<AttendanceEntry, "id">,
 ): Promise<AttendanceEntry> {
-  const saved = await readAttendanceFile();
-  const next: AttendanceEntry = { id: randomUUID(), ...entry };
-  saved.entries.push(next);
-  await writeAttendanceFile(saved);
-  return next;
+  const { data, error } = await supabase
+    .from("attendance_entries")
+    .insert({
+      roster_id: entry.rosterId,
+      roster_title: entry.rosterTitle,
+      student_id: entry.studentId,
+      name: entry.name,
+      date_key: entry.dateKey,
+      recorded_at: entry.recordedAt,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return rowToEntry(data as Row);
 }
 
 export async function getAttendanceByDate(params: {
   rosterId?: string;
   dateKey: string;
 }): Promise<AttendanceEntry[]> {
-  const saved = await readAttendanceFile();
-  return saved.entries.filter((e) => {
-    if (e.dateKey !== params.dateKey) return false;
-    if (params.rosterId && e.rosterId !== params.rosterId) return false;
-    return true;
-  });
+  let query = supabase
+    .from("attendance_entries")
+    .select("*")
+    .eq("date_key", params.dateKey);
+
+  if (params.rosterId) {
+    query = query.eq("roster_id", params.rosterId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data as Row[]).map(rowToEntry);
 }

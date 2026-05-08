@@ -1,6 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import { supabase } from "./supabase";
 
 export type Roster = {
   id: string;
@@ -9,77 +7,51 @@ export type Roster = {
   students: Record<string, string>;
 };
 
-type RostersFile = {
-  rosters: Roster[];
+type RosterRow = {
+  id: string;
+  title: string;
+  updated_at: string;
 };
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const ROSTERS_FILE = path.join(DATA_DIR, "rosters.json");
-const LEGACY_STUDENTS_FILE = path.join(DATA_DIR, "students.json");
+type StudentRow = {
+  roster_id: string;
+  student_id: string;
+  name: string;
+};
 
-function normalizeStudents(students: Record<string, string>): Record<string, string> {
-  const next: Record<string, string> = {};
-  for (const [rawId, rawName] of Object.entries(students)) {
-    const id = normalizeStudentId(rawId);
-    const name = String(rawName ?? "").trim();
-    if (!id || !name) continue;
-    next[id] = name;
-  }
-  return next;
-}
-
-async function readJsonSafe<T>(filePath: string): Promise<T | null> {
-  try {
-    const raw = await fs.readFile(filePath, "utf8");
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-}
-
-async function writeJson(filePath: string, value: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-}
-
-async function readLegacyAsRoster(): Promise<Roster | null> {
-  const legacy = await readJsonSafe<{
-    title?: unknown;
-    updatedAt?: unknown;
-    students?: unknown;
-  }>(LEGACY_STUDENTS_FILE);
-  if (!legacy || typeof legacy.students !== "object" || !legacy.students) return null;
-
-  const students = normalizeStudents(legacy.students as Record<string, string>);
-  if (Object.keys(students).length === 0) return null;
-
-  return {
-    id: randomUUID(),
-    title: typeof legacy.title === "string" && legacy.title.trim() ? legacy.title.trim() : "학생 명단",
-    updatedAt:
-      typeof legacy.updatedAt === "string" && legacy.updatedAt
-        ? legacy.updatedAt
-        : new Date().toISOString(),
-    students,
-  };
+async function fetchStudentsForRosters(rosterIds: string[]): Promise<StudentRow[]> {
+  if (rosterIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("roster_students")
+    .select("roster_id, student_id, name")
+    .in("roster_id", rosterIds);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as StudentRow[];
 }
 
 export async function readRostersList(): Promise<Roster[]> {
-  const parsed = await readJsonSafe<RostersFile>(ROSTERS_FILE);
-  if (parsed?.rosters?.length) {
-    return parsed.rosters.map((r) => ({
-      id: r.id,
-      title: r.title,
-      updatedAt: r.updatedAt,
-      students: normalizeStudents(r.students ?? {}),
-    }));
+  const { data, error } = await supabase
+    .from("rosters")
+    .select("id, title, updated_at")
+    .order("updated_at", { ascending: false });
+  if (error) throw new Error(error.message);
+
+  const rows = (data ?? []) as RosterRow[];
+  if (rows.length === 0) return [];
+
+  const students = await fetchStudentsForRosters(rows.map((r) => r.id));
+  const studentsByRoster: Record<string, Record<string, string>> = {};
+  for (const s of students) {
+    if (!studentsByRoster[s.roster_id]) studentsByRoster[s.roster_id] = {};
+    studentsByRoster[s.roster_id][s.student_id] = s.name;
   }
 
-  const fallback = await readLegacyAsRoster();
-  if (!fallback) return [];
-
-  await writeJson(ROSTERS_FILE, { rosters: [fallback] });
-  return [fallback];
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    updatedAt: r.updated_at,
+    students: studentsByRoster[r.id] ?? {},
+  }));
 }
 
 export async function getActiveRoster(): Promise<Roster | null> {
@@ -92,22 +64,47 @@ export async function saveUploadedRoster(
   students: Record<string, string>,
 ): Promise<Roster> {
   const normalized = normalizeStudents(students);
-  const nextRoster: Roster = {
-    id: randomUUID(),
-    title: title.trim() || "학생 명단",
-    updatedAt: new Date().toISOString(),
+  const updatedAt = new Date().toISOString();
+
+  const { data: rosterData, error: rosterError } = await supabase
+    .from("rosters")
+    .insert({ title: title.trim() || "학생 명단", updated_at: updatedAt })
+    .select()
+    .single();
+  if (rosterError) throw new Error(rosterError.message);
+
+  const roster = rosterData as RosterRow;
+
+  const studentRows = Object.entries(normalized).map(([studentId, name]) => ({
+    roster_id: roster.id,
+    student_id: studentId,
+    name,
+  }));
+
+  if (studentRows.length > 0) {
+    const { error: studentsError } = await supabase
+      .from("roster_students")
+      .insert(studentRows);
+    if (studentsError) throw new Error(studentsError.message);
+  }
+
+  return {
+    id: roster.id,
+    title: roster.title,
+    updatedAt: roster.updated_at,
     students: normalized,
   };
+}
 
-  const current = await readRostersList();
-  const updated = [nextRoster, ...current];
-  await writeJson(ROSTERS_FILE, { rosters: updated });
-  await writeJson(LEGACY_STUDENTS_FILE, {
-    title: nextRoster.title,
-    updatedAt: nextRoster.updatedAt,
-    students: nextRoster.students,
-  });
-  return nextRoster;
+function normalizeStudents(students: Record<string, string>): Record<string, string> {
+  const next: Record<string, string> = {};
+  for (const [rawId, rawName] of Object.entries(students)) {
+    const id = normalizeStudentId(rawId);
+    const name = String(rawName ?? "").trim();
+    if (!id || !name) continue;
+    next[id] = name;
+  }
+  return next;
 }
 
 export function normalizeStudentId(input: string): string {
