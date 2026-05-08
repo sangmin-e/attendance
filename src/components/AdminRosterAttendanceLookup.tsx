@@ -7,6 +7,7 @@ type RosterSummary = {
   title: string;
   updatedAt: string;
   count: number;
+  studentTypes: string[];
 };
 
 type AttendanceLookupResponse = {
@@ -14,6 +15,7 @@ type AttendanceLookupResponse = {
     id: string;
     studentId: string;
     name: string | null;
+    studentType: string | null;
     recordedAt: string;
   }>;
 };
@@ -28,6 +30,7 @@ function todayDateKey(): string {
 
 export function AdminRosterAttendanceLookup({ rosters }: { rosters: RosterSummary[] }) {
   const [rosterId, setRosterId] = useState(rosters[0]?.id ?? "");
+  const [studentType, setStudentType] = useState("");
   const [dateKey, setDateKey] = useState(todayDateKey());
   const [entries, setEntries] = useState<AttendanceLookupResponse["entries"]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +38,7 @@ export function AdminRosterAttendanceLookup({ rosters }: { rosters: RosterSummar
 
   const hasRosters = rosters.length > 0;
   const selected = useMemo(() => rosters.find((r) => r.id === rosterId), [rosterId, rosters]);
+  const selectedTypes = selected?.studentTypes ?? [];
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,6 +48,7 @@ export function AdminRosterAttendanceLookup({ rosters }: { rosters: RosterSummar
     setError(null);
     try {
       const params = new URLSearchParams({ rosterId, date: dateKey });
+      if (studentType) params.set("studentType", studentType);
       const res = await fetch(`/api/admin/attendance/by-date?${params.toString()}`);
       const data = (await res.json()) as AttendanceLookupResponse & { error?: string };
       if (!res.ok) {
@@ -72,12 +77,34 @@ export function AdminRosterAttendanceLookup({ rosters }: { rosters: RosterSummar
             <select
               id="roster-select"
               value={rosterId}
-              onChange={(e) => setRosterId(e.target.value)}
+              onChange={(e) => {
+                setRosterId(e.target.value);
+                setStudentType("");
+                setEntries([]);
+              }}
               className="mt-1.5 w-full rounded-lg border border-edge bg-card px-3 py-2 text-sm text-ink"
             >
               {rosters.map((r) => (
                 <option value={r.id} key={r.id}>
                   {r.title} ({r.count}명)
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-ink" htmlFor="attendance-type">
+              유형
+            </label>
+            <select
+              id="attendance-type"
+              value={studentType}
+              onChange={(e) => setStudentType(e.target.value)}
+              className="mt-1.5 w-full rounded-lg border border-edge bg-card px-3 py-2 text-sm text-ink"
+            >
+              <option value="">전체</option>
+              {selectedTypes.map((type) => (
+                <option value={type} key={type}>
+                  {type}
                 </option>
               ))}
             </select>
@@ -112,7 +139,9 @@ export function AdminRosterAttendanceLookup({ rosters }: { rosters: RosterSummar
           <ul className="mt-3 space-y-1">
             {entries.map((e) => (
               <li key={e.id}>
-                {e.studentId} {e.name ?? ""} ({new Date(e.recordedAt).toLocaleTimeString("ko-KR")})
+                {e.studentId} {e.name ?? ""}
+                {e.studentType ? ` / ${e.studentType}` : ""} (
+                {new Date(e.recordedAt).toLocaleTimeString("ko-KR")})
               </li>
             ))}
           </ul>

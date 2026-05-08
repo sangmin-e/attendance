@@ -1,10 +1,15 @@
-import { supabase } from "./supabase";
+import { getSupabase } from "./supabase";
 
 export type Roster = {
   id: string;
   title: string;
   updatedAt: string;
-  students: Record<string, string>;
+  students: Record<string, StudentInfo>;
+};
+
+export type StudentInfo = {
+  name: string;
+  studentType: string;
 };
 
 type RosterRow = {
@@ -17,19 +22,22 @@ type StudentRow = {
   roster_id: string;
   student_id: string;
   name: string;
+  student_type: string | null;
 };
 
 async function fetchStudentsForRosters(rosterIds: string[]): Promise<StudentRow[]> {
   if (rosterIds.length === 0) return [];
+  const supabase = getSupabase();
   const { data, error } = await supabase
     .from("roster_students")
-    .select("roster_id, student_id, name")
+    .select("roster_id, student_id, name, student_type")
     .in("roster_id", rosterIds);
   if (error) throw new Error(error.message);
   return (data ?? []) as StudentRow[];
 }
 
 export async function readRostersList(): Promise<Roster[]> {
+  const supabase = getSupabase();
   const { data, error } = await supabase
     .from("rosters")
     .select("id, title, updated_at")
@@ -40,10 +48,13 @@ export async function readRostersList(): Promise<Roster[]> {
   if (rows.length === 0) return [];
 
   const students = await fetchStudentsForRosters(rows.map((r) => r.id));
-  const studentsByRoster: Record<string, Record<string, string>> = {};
+  const studentsByRoster: Record<string, Record<string, StudentInfo>> = {};
   for (const s of students) {
     if (!studentsByRoster[s.roster_id]) studentsByRoster[s.roster_id] = {};
-    studentsByRoster[s.roster_id][s.student_id] = s.name;
+    studentsByRoster[s.roster_id][s.student_id] = {
+      name: s.name,
+      studentType: s.student_type ?? "",
+    };
   }
 
   return rows.map((r) => ({
@@ -59,10 +70,17 @@ export async function getActiveRoster(): Promise<Roster | null> {
   return rosters[0] ?? null;
 }
 
+export async function deleteRosterById(rosterId: string): Promise<void> {
+  const supabase = getSupabase();
+  const { error } = await supabase.from("rosters").delete().eq("id", rosterId);
+  if (error) throw new Error(error.message);
+}
+
 export async function saveUploadedRoster(
   title: string,
-  students: Record<string, string>,
+  students: Record<string, StudentInfo>,
 ): Promise<Roster> {
+  const supabase = getSupabase();
   const normalized = normalizeStudents(students);
   const updatedAt = new Date().toISOString();
 
@@ -78,7 +96,8 @@ export async function saveUploadedRoster(
   const studentRows = Object.entries(normalized).map(([studentId, name]) => ({
     roster_id: roster.id,
     student_id: studentId,
-    name,
+    name: name.name,
+    student_type: name.studentType || null,
   }));
 
   if (studentRows.length > 0) {
@@ -96,13 +115,14 @@ export async function saveUploadedRoster(
   };
 }
 
-function normalizeStudents(students: Record<string, string>): Record<string, string> {
-  const next: Record<string, string> = {};
-  for (const [rawId, rawName] of Object.entries(students)) {
+function normalizeStudents(students: Record<string, StudentInfo>): Record<string, StudentInfo> {
+  const next: Record<string, StudentInfo> = {};
+  for (const [rawId, rawStudent] of Object.entries(students)) {
     const id = normalizeStudentId(rawId);
-    const name = String(rawName ?? "").trim();
+    const name = String(rawStudent?.name ?? "").trim();
+    const studentType = String(rawStudent?.studentType ?? "").trim();
     if (!id || !name) continue;
-    next[id] = name;
+    next[id] = { name, studentType };
   }
   return next;
 }

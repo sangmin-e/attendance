@@ -45,7 +45,9 @@ export function AdminStudentUpload() {
   return (
     <section className="border-t border-edge pt-8 text-left">
       <h2 className="text-lg font-semibold text-ink">학생 명단 업로드</h2>
-      <p className="mt-2 text-sm text-muted">학번/이름 엑셀 파일을 업로드하세요.</p>
+      <p className="mt-2 text-sm text-muted">
+        학번, 이름, 유형이 들어 있는 엑셀 파일을 업로드하세요.
+      </p>
       <form className="mt-4 flex flex-col gap-3" onSubmit={onSubmit}>
         <div>
           <label htmlFor="roster-title" className="block text-sm font-medium text-ink">

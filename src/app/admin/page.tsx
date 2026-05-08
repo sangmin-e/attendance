@@ -3,6 +3,7 @@ import { AdminLoginForm } from "@/components/AdminLoginForm";
 import { AdminLogoutButton } from "@/components/AdminLogoutButton";
 import { AdminGatePasswordForm } from "@/components/AdminGatePasswordForm";
 import { AdminRosterAttendanceLookup } from "@/components/AdminRosterAttendanceLookup";
+import { AdminRosterDelete } from "@/components/AdminRosterDelete";
 import { AdminStudentUpload } from "@/components/AdminStudentUpload";
 import { isAdminAuthenticated } from "@/lib/auth-helpers";
 import { readRostersList } from "@/lib/students-store";
@@ -15,6 +16,13 @@ export default async function AdminPage() {
     title: r.title,
     updatedAt: r.updatedAt,
     count: Object.keys(r.students).length,
+    studentTypes: Array.from(
+      new Set(
+        Object.values(r.students)
+          .map((s) => s.studentType)
+          .filter(Boolean),
+      ),
+    ).sort((a, b) => a.localeCompare(b, "ko-KR")),
   }));
 
   return (
@@ -33,6 +41,7 @@ export default async function AdminPage() {
             <div className="mt-8 flex w-full flex-col gap-12 sm:gap-14 text-left">
               <AdminStudentUpload />
               <AdminRosterAttendanceLookup rosters={rosterSummaries} />
+              <AdminRosterDelete rosters={rosterSummaries} />
               <AdminGatePasswordForm />
               <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-4">
                 <AdminLogoutButton />

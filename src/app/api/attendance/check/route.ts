@@ -7,10 +7,7 @@ import { getActiveRoster, normalizeStudentId } from "@/lib/students-store";
 export async function POST(req: Request) {
   const secret = process.env.ATTENDANCE_GATE_SECRET;
   if (!secret) {
-    return NextResponse.json(
-      { error: "서버 설정 오류입니다." },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "서버 설정 오류입니다." }, { status: 500 });
   }
 
   const cookieStore = await cookies();
@@ -35,10 +32,18 @@ export async function POST(req: Request) {
   }
 
   const id = normalizeStudentId(raw);
+  if (!id) {
+    return NextResponse.json({ error: "잘못 입력하였습니다." }, { status: 400 });
+  }
 
   const roster = await getActiveRoster();
-  const students = roster?.students ?? {};
-  const name = students[id] ?? null;
+  const student = roster?.students[id] ?? null;
+  if (!roster || !student) {
+    return NextResponse.json(
+      { error: "잘못 입력하였습니다.", studentId: id },
+      { status: 400 },
+    );
+  }
 
   const dateKey =
     typeof body.clientDateKey === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.clientDateKey)
@@ -47,20 +52,21 @@ export async function POST(req: Request) {
 
   const recordedAt = new Date().toISOString();
 
-  if (roster) {
-    await appendAttendance({
-      rosterId: roster.id,
-      rosterTitle: roster.title,
-      studentId: id,
-      name,
-      dateKey,
-      recordedAt,
-    });
-  }
+  await appendAttendance({
+    rosterId: roster.id,
+    rosterTitle: roster.title,
+    studentId: id,
+    name: student.name,
+    studentType: student.studentType || null,
+    dateKey,
+    recordedAt,
+  });
 
-  const message = name
-    ? `${id} ${name} 학생\n출석했습니다.`
-    : `${id} 학생\n출석했습니다.`;
-
-  return NextResponse.json({ ok: true, message, studentId: id, name });
+  return NextResponse.json({
+    ok: true,
+    message: `${id} ${student.name} 학생\n출석했습니다.`,
+    studentId: id,
+    name: student.name,
+    studentType: student.studentType,
+  });
 }

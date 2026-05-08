@@ -21,11 +21,15 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date") ?? "";
   const rosterId = searchParams.get("rosterId") ?? undefined;
+  const studentType = searchParams.get("studentType")?.trim() || undefined;
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return NextResponse.json({ error: "날짜 형식이 올바르지 않습니다." }, { status: 400 });
+    return NextResponse.json(
+      { error: "날짜 형식이 올바르지 않습니다." },
+      { status: 400 },
+    );
   }
 
-  const entries = await getAttendanceByDate({ rosterId, dateKey: date });
+  const entries = await getAttendanceByDate({ rosterId, dateKey: date, studentType });
   return NextResponse.json({ entries });
 }

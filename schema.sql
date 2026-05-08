@@ -18,8 +18,12 @@ create table if not exists roster_students (
   roster_id   uuid not null references rosters(id) on delete cascade,
   student_id  text not null,
   name        text not null,
+  student_type text,
   primary key (roster_id, student_id)
 );
+
+alter table roster_students
+  add column if not exists student_type text;
 
 -- ---------------------------------------------------------------
 -- 3. attendance_entries
@@ -30,9 +34,13 @@ create table if not exists attendance_entries (
   roster_title  text not null,
   student_id    text not null,
   name          text,
+  student_type  text,
   date_key      date not null,
   recorded_at   timestamptz not null default now()
 );
+
+alter table attendance_entries
+  add column if not exists student_type text;
 
 create index if not exists attendance_entries_date_key_idx
   on attendance_entries(date_key);

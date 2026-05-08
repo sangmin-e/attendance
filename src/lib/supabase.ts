@@ -1,20 +1,28 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+let cachedSupabase: SupabaseClient | null = null;
 
-// JWT payload에서 Supabase 프로젝트 ref 추출
 function getProjectRef(key: string): string {
   try {
     const payload = JSON.parse(Buffer.from(key.split(".")[1], "base64").toString());
-    return payload.ref as string;
+    if (typeof payload.ref !== "string" || !payload.ref) {
+      throw new Error();
+    }
+    return payload.ref;
   } catch {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY가 올바르지 않습니다.");
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY is invalid.");
   }
 }
 
-const supabaseUrl = `https://${getProjectRef(supabaseServiceRoleKey)}.supabase.co`;
+export function getSupabase(): SupabaseClient {
+  if (cachedSupabase) return cachedSupabase;
 
-// 서버 전용 클라이언트 (service_role key — RLS 우회)
-export const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
-  auth: { persistSession: false },
-});
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  const supabaseUrl = `https://${getProjectRef(supabaseServiceRoleKey)}.supabase.co`;
+
+  cachedSupabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: { persistSession: false },
+  });
+
+  return cachedSupabase;
+}

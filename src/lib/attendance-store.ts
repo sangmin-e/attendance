@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { getSupabase } from "./supabase";
 
 export type AttendanceEntry = {
   id: string;
@@ -6,6 +6,7 @@ export type AttendanceEntry = {
   rosterTitle: string;
   studentId: string;
   name: string | null;
+  studentType: string | null;
   dateKey: string;
   recordedAt: string;
 };
@@ -16,6 +17,7 @@ type Row = {
   roster_title: string;
   student_id: string;
   name: string | null;
+  student_type: string | null;
   date_key: string;
   recorded_at: string;
 };
@@ -27,6 +29,7 @@ function rowToEntry(row: Row): AttendanceEntry {
     rosterTitle: row.roster_title,
     studentId: row.student_id,
     name: row.name,
+    studentType: row.student_type,
     dateKey: row.date_key,
     recordedAt: row.recorded_at,
   };
@@ -35,6 +38,7 @@ function rowToEntry(row: Row): AttendanceEntry {
 export async function appendAttendance(
   entry: Omit<AttendanceEntry, "id">,
 ): Promise<AttendanceEntry> {
+  const supabase = getSupabase();
   const { data, error } = await supabase
     .from("attendance_entries")
     .insert({
@@ -42,6 +46,7 @@ export async function appendAttendance(
       roster_title: entry.rosterTitle,
       student_id: entry.studentId,
       name: entry.name,
+      student_type: entry.studentType,
       date_key: entry.dateKey,
       recorded_at: entry.recordedAt,
     })
@@ -55,7 +60,9 @@ export async function appendAttendance(
 export async function getAttendanceByDate(params: {
   rosterId?: string;
   dateKey: string;
+  studentType?: string;
 }): Promise<AttendanceEntry[]> {
+  const supabase = getSupabase();
   let query = supabase
     .from("attendance_entries")
     .select("*")
@@ -63,6 +70,10 @@ export async function getAttendanceByDate(params: {
 
   if (params.rosterId) {
     query = query.eq("roster_id", params.rosterId);
+  }
+
+  if (params.studentType) {
+    query = query.eq("student_type", params.studentType);
   }
 
   const { data, error } = await query;

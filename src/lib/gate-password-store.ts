@@ -1,6 +1,7 @@
-import { supabase } from "./supabase";
+import { getSupabase } from "./supabase";
 
 export async function getAttendanceGatePassword(): Promise<string> {
+  const supabase = getSupabase();
   const { data, error } = await supabase
     .from("gate_password")
     .select("password")
@@ -17,6 +18,7 @@ export async function setAttendanceGatePassword(password: string): Promise<void>
   const next = password.trim();
   if (!next) throw new Error("Gate password cannot be empty");
 
+  const supabase = getSupabase();
   const { error } = await supabase
     .from("gate_password")
     .upsert({ id: 1, password: next, updated_at: new Date().toISOString() }, { onConflict: "id" });
