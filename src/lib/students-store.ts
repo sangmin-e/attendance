@@ -4,10 +4,11 @@ export type Roster = {
   id: string;
   title: string;
   updatedAt: string;
-  students: Record<string, StudentInfo>;
+  students: StudentInfo[];
 };
 
 export type StudentInfo = {
+  studentId: string;
   name: string;
   studentType: string;
 };
@@ -36,6 +37,14 @@ async function fetchStudentsForRosters(rosterIds: string[]): Promise<StudentRow[
   return (data ?? []) as StudentRow[];
 }
 
+function rowsToStudents(rows: StudentRow[]): StudentInfo[] {
+  return rows.map((row) => ({
+    studentId: row.student_id,
+    name: row.name,
+    studentType: row.student_type ?? "",
+  }));
+}
+
 export async function readRostersList(): Promise<Roster[]> {
   const supabase = getSupabase();
   const { data, error } = await supabase
@@ -48,20 +57,17 @@ export async function readRostersList(): Promise<Roster[]> {
   if (rows.length === 0) return [];
 
   const students = await fetchStudentsForRosters(rows.map((r) => r.id));
-  const studentsByRoster: Record<string, Record<string, StudentInfo>> = {};
-  for (const s of students) {
-    if (!studentsByRoster[s.roster_id]) studentsByRoster[s.roster_id] = {};
-    studentsByRoster[s.roster_id][s.student_id] = {
-      name: s.name,
-      studentType: s.student_type ?? "",
-    };
+  const studentsByRoster: Record<string, StudentRow[]> = {};
+  for (const student of students) {
+    if (!studentsByRoster[student.roster_id]) studentsByRoster[student.roster_id] = [];
+    studentsByRoster[student.roster_id].push(student);
   }
 
-  return rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    updatedAt: r.updated_at,
-    students: studentsByRoster[r.id] ?? {},
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    updatedAt: row.updated_at,
+    students: rowsToStudents(studentsByRoster[row.id] ?? []),
   }));
 }
 
@@ -82,19 +88,11 @@ export async function getRosterById(rosterId: string): Promise<Roster | null> {
 
   const row = data as RosterRow;
   const students = await fetchStudentsForRosters([row.id]);
-  const studentsById: Record<string, StudentInfo> = {};
-  for (const s of students) {
-    studentsById[s.student_id] = {
-      name: s.name,
-      studentType: s.student_type ?? "",
-    };
-  }
-
   return {
     id: row.id,
     title: row.title,
     updatedAt: row.updated_at,
-    students: studentsById,
+    students: rowsToStudents(students),
   };
 }
 
@@ -106,12 +104,32 @@ export async function deleteRosterById(rosterId: string): Promise<void> {
 
 export async function saveUploadedRoster(
   title: string,
-  students: Record<string, StudentInfo>,
+  students: StudentInfo[],
 ): Promise<Roster> {
-  const supabase = getSupabase();
-  const normalized = normalizeStudents(students);
-  const updatedAt = new Date().toISOString();
+  const rosters = await saveUploadedRosters(title, students);
+  const first = rosters[0];
+  if (!first) throw new Error("No students to save.");
+  return first;
+}
 
+export async function saveUploadedRosters(
+  title: string,
+  students: StudentInfo[],
+): Promise<Roster[]> {
+  const normalized = normalizeStudents(students);
+  const groups = groupStudentsByType(normalized, title);
+  const saved: Roster[] = [];
+
+  for (const [groupTitle, groupStudents] of groups) {
+    saved.push(await insertRoster(groupTitle, groupStudents));
+  }
+
+  return saved;
+}
+
+async function insertRoster(title: string, students: StudentInfo[]): Promise<Roster> {
+  const supabase = getSupabase();
+  const updatedAt = new Date().toISOString();
   const { data: rosterData, error: rosterError } = await supabase
     .from("rosters")
     .insert({ title: title.trim() || "학생 명단", updated_at: updatedAt })
@@ -120,12 +138,11 @@ export async function saveUploadedRoster(
   if (rosterError) throw new Error(rosterError.message);
 
   const roster = rosterData as RosterRow;
-
-  const studentRows = Object.entries(normalized).map(([studentId, name]) => ({
+  const studentRows = students.map((student) => ({
     roster_id: roster.id,
-    student_id: studentId,
-    name: name.name,
-    student_type: name.studentType || null,
+    student_id: student.studentId,
+    name: student.name,
+    student_type: student.studentType,
   }));
 
   if (studentRows.length > 0) {
@@ -139,20 +156,37 @@ export async function saveUploadedRoster(
     id: roster.id,
     title: roster.title,
     updatedAt: roster.updated_at,
-    students: normalized,
+    students,
   };
 }
 
-function normalizeStudents(students: Record<string, StudentInfo>): Record<string, StudentInfo> {
-  const next: Record<string, StudentInfo> = {};
-  for (const [rawId, rawStudent] of Object.entries(students)) {
-    const id = normalizeStudentId(rawId);
+function groupStudentsByType(
+  students: StudentInfo[],
+  fallbackTitle: string,
+): Array<[string, StudentInfo[]]> {
+  const groups = new Map<string, StudentInfo[]>();
+  const fallback = fallbackTitle.trim() || "학생 명단";
+
+  for (const student of students) {
+    const groupTitle = student.studentType || fallback;
+    const group = groups.get(groupTitle) ?? [];
+    group.push(student);
+    groups.set(groupTitle, group);
+  }
+
+  return Array.from(groups.entries());
+}
+
+function normalizeStudents(students: StudentInfo[]): StudentInfo[] {
+  const byKey = new Map<string, StudentInfo>();
+  for (const rawStudent of students) {
+    const studentId = normalizeStudentId(rawStudent?.studentId ?? "");
     const name = String(rawStudent?.name ?? "").trim();
     const studentType = String(rawStudent?.studentType ?? "").trim();
-    if (!id || !name) continue;
-    next[id] = { name, studentType };
+    if (!studentId || !name) continue;
+    byKey.set(`${studentId}\u0000${studentType}`, { studentId, name, studentType });
   }
-  return next;
+  return Array.from(byKey.values());
 }
 
 export function normalizeStudentId(input: string): string {

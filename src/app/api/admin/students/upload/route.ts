@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
   const bytes = await file.arrayBuffer();
   const students = parseStudentWorkbook(Buffer.from(bytes));
-  const count = Object.keys(students).length;
+  const count = students.length;
   if (count === 0) {
     return NextResponse.json(
       { error: "엑셀에서 학생 정보를 읽지 못했습니다." },

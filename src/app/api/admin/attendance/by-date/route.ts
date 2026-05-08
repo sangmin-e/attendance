@@ -34,7 +34,12 @@ export async function GET(req: Request) {
   const roster = rosterId ? await getRosterById(rosterId) : null;
   const entries = await getAttendanceByDate({ rosterId, dateKey: date });
   const normalizedEntries = entries.map((entry) => {
-    const student = roster?.students[entry.studentId];
+    const student =
+      roster?.students.find(
+        (candidate) =>
+          candidate.studentId === entry.studentId &&
+          (!entry.studentType || candidate.studentType === entry.studentType),
+      ) ?? roster?.students.find((candidate) => candidate.studentId === entry.studentId);
     return {
       ...entry,
       name: entry.name ?? student?.name ?? null,

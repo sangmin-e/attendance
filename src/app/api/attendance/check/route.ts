@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { GATE_SESSION_COOKIE, verifyGateSessionCookie } from "@/lib/gate-session";
 import { appendAttendance } from "@/lib/attendance-store";
-import { getActiveRoster, normalizeStudentId } from "@/lib/students-store";
+import { getRosterById, normalizeStudentId } from "@/lib/students-store";
 
 export async function POST(req: Request) {
   const secret = process.env.ATTENDANCE_GATE_SECRET;
@@ -19,11 +19,26 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { studentId?: string; clientDateKey?: string };
+  let body: {
+    studentId?: string;
+    rosterId?: string;
+    studentType?: string;
+    clientDateKey?: string;
+  };
   try {
-    body = (await req.json()) as { studentId?: string; clientDateKey?: string };
+    body = (await req.json()) as {
+      studentId?: string;
+      rosterId?: string;
+      studentType?: string;
+      clientDateKey?: string;
+    };
   } catch {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
+  }
+
+  const rosterId = body.rosterId?.trim() ?? "";
+  if (!rosterId) {
+    return NextResponse.json({ error: "수업을 먼저 선택하세요." }, { status: 400 });
   }
 
   const raw = body.studentId?.trim() ?? "";
@@ -36,8 +51,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "잘못 입력하였습니다." }, { status: 400 });
   }
 
-  const roster = await getActiveRoster();
-  const student = roster?.students[id] ?? null;
+  const selectedStudentType = body.studentType?.trim() ?? "";
+  const roster = await getRosterById(rosterId);
+  const student =
+    roster?.students.find(
+      (candidate) =>
+        candidate.studentId === id &&
+        (!selectedStudentType || candidate.studentType === selectedStudentType),
+    ) ?? null;
   if (!roster || !student) {
     return NextResponse.json(
       { error: "잘못 입력하였습니다.", studentId: id },
@@ -72,5 +93,7 @@ export async function POST(req: Request) {
     studentId: id,
     name: student.name,
     studentType: student.studentType,
+    rosterId: roster.id,
+    rosterTitle: roster.title,
   });
 }

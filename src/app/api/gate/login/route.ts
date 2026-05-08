@@ -38,7 +38,6 @@ export async function POST(req: Request) {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
-    maxAge: Math.floor(SESSION_MS / 1000),
     secure: process.env.NODE_ENV === "production",
   });
 

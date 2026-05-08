@@ -15,10 +15,10 @@ export default async function AdminPage() {
     id: r.id,
     title: r.title,
     updatedAt: r.updatedAt,
-    count: Object.keys(r.students).length,
+    count: r.students.length,
     studentTypes: Array.from(
       new Set(
-        Object.values(r.students)
+        r.students
           .map((s) => s.studentType)
           .filter(Boolean),
       ),

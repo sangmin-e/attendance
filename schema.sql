@@ -18,12 +18,26 @@ create table if not exists roster_students (
   roster_id   uuid not null references rosters(id) on delete cascade,
   student_id  text not null,
   name        text not null,
-  student_type text,
-  primary key (roster_id, student_id)
+  student_type text not null default '',
+  primary key (roster_id, student_id, student_type)
 );
 
 alter table roster_students
   add column if not exists student_type text;
+
+update roster_students
+  set student_type = ''
+  where student_type is null;
+
+alter table roster_students
+  alter column student_type set default '',
+  alter column student_type set not null;
+
+alter table roster_students
+  drop constraint if exists roster_students_pkey;
+
+alter table roster_students
+  add primary key (roster_id, student_id, student_type);
 
 -- ---------------------------------------------------------------
 -- 3. attendance_entries

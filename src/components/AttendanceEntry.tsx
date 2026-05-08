@@ -15,7 +15,13 @@ function formatLocalAttendanceTime(d: Date): string {
   return `${month}월 ${day}일 ${hh}시 ${mm}분 출석했습니다`;
 }
 
-export function AttendanceEntry() {
+export function AttendanceEntry({
+  rosterId,
+  studentType,
+}: {
+  rosterId: string;
+  studentType: string;
+}) {
   const [studentId, setStudentId] = useState("");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [successTimeLine, setSuccessTimeLine] = useState<string | null>(null);
@@ -32,7 +38,7 @@ export function AttendanceEntry() {
       const res = await fetch("/api/attendance/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId, clientDateKey }),
+        body: JSON.stringify({ studentId, rosterId, studentType, clientDateKey }),
       });
       const data = (await res.json()) as { error?: string; message?: string };
       if (!res.ok) {
@@ -43,7 +49,7 @@ export function AttendanceEntry() {
         }
         return;
       }
-      setSuccessMessage(data.message ?? "출석 처리되었습니다.");
+      setSuccessMessage(data.message ?? "출석 처리했습니다.");
       setSuccessTimeLine(formatLocalAttendanceTime(new Date()));
       setStudentId("");
     } catch {
@@ -130,7 +136,7 @@ export function AttendanceEntry() {
       )}
 
       <div
-        className={`shrink-0 items-center justify-center px-4 ${studentId ? "mb-4 flex min-h-[3.25rem] py-3 rounded-xl bg-canvas/70" : "mb-1 flex min-h-0 py-0"}`}
+        className={`shrink-0 items-center justify-center px-4 ${studentId ? "mb-4 flex min-h-[3.25rem] rounded-xl bg-canvas/70 py-3" : "mb-1 flex min-h-0 py-0"}`}
         aria-live="polite"
         aria-label={studentId ? `입력 중인 학번 ${studentId}` : "학번 입력 대기"}
       >
@@ -139,7 +145,7 @@ export function AttendanceEntry() {
             {studentId}
           </span>
         ) : (
-          <span className="sr-only">학번을 입력하세요</span>
+          <span className="sr-only">학번을 입력하세요.</span>
         )}
       </div>
 
@@ -169,7 +175,7 @@ export function AttendanceEntry() {
             disabled={studentId.length === 0 || pending}
             onClick={submitAttendance}
           >
-            {pending ? "처리 중…" : "출석 처리"}
+            {pending ? "처리 중..." : "출석 처리"}
           </button>
         </div>
       </div>

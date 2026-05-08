@@ -28,6 +28,7 @@ export function GateUnlockForm() {
         return;
       }
       const dest = nextPath.startsWith("/") ? nextPath : "/";
+      window.sessionStorage.setItem("attendance:gateUnlocked", "1");
       router.push(dest);
       router.refresh();
     } catch {
